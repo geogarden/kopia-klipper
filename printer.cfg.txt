@@ -1,0 +1,454 @@
+# This file contains pin mappings for the stock 2020 Creality Ender 3
+# MAX. To use this config, during "make menuconfig" select the
+# STM32F103 with a "28KiB bootloader" and serial (on USART1 PA10/PA9)
+# communication.
+
+# Because this printer has factory wiring, mounts, and firmware for
+# a BLTouch, but does not ship with one at this time, default values
+# for the sensor have been specified, but disabled, in anticipation of
+# future revisions or user modification. User should take care to
+# customize the offsets, particularly z-offset, for their specific unit.
+
+# If you prefer a direct serial connection, in "make menuconfig"
+# select "Enable extra low-level configuration options" and select
+# serial (on USART3 PB11/PB10), which is broken out on the 10 pin IDC
+# cable used for the LCD module as follows:
+# 3: Tx, 4: Rx, 9: GND, 10: VCC
+
+# Flash this firmware by copying "out/klipper.bin" to a SD card and
+# turning on the printer with the card inserted. The firmware
+# filename must end in ".bin" and must not match the last filename
+# that was flashed.
+
+# See docs/Config_Reference.md for a description of parameters.
+
+[stepper_x]
+step_pin: PC2
+dir_pin: PB9
+enable_pin: !PC3
+microsteps: 16
+rotation_distance: 40
+endstop_pin: ^PA5
+position_endstop: 0
+position_max: 300
+homing_speed: 50
+
+[stepper_y]
+step_pin: PB8
+dir_pin: PB7
+enable_pin: !PC3
+microsteps: 16
+rotation_distance: 40
+endstop_pin: ^PA6
+position_endstop: 0
+position_max: 300
+homing_speed: 50
+
+[stepper_z]
+step_pin: PB6
+dir_pin: !PB5
+enable_pin: !PC3
+microsteps: 16
+rotation_distance: 8
+#position_endstop: 0.0                     # disable to use BLTouch
+#endstop_pin: ^PA7                         # disable to use BLTouch
+endstop_pin: probe:z_virtual_endstop    # enable to use BLTouch
+position_min: -5                        # enable to use BLTouch
+position_max: 340
+
+[safe_z_home]                         # enable for BLTouch
+home_xy_position: 150, 150
+speed: 100
+z_hop: 10
+z_hop_speed: 5
+
+[bltouch]                             # enable for BLTouch - fast-mode
+sensor_pin: ^PB1
+control_pin: PB0
+pin_up_touch_mode_reports_triggered: True
+probe_with_touch_mode: True
+x_offset: 47                          # modify as needed for bltouch location
+y_offset: 10                          # modify as needed for bltouch location
+#z_offset: 0                   # modify as needed for bltouch or run PROBE_CALIBRATE
+speed: 10
+samples: 3
+sample_retract_dist: 5.0              # Can be set lower, example 2.5 depending on height of bltouch from bed
+lift_speed: 40
+samples_tolerance_retries: 3
+speed: 10
+samples: 2
+
+[bed_mesh]                            # enable for BLTouch
+speed: 200
+mesh_min: 60 , 50
+mesh_max: 290, 290
+algorithm: bicubic
+probe_count: 7,7                  # 49 points due to large bed size
+horizontal_move_z: 5
+
+
+#[gcode_macro G29]                    # If moving from marlin to klipper uncomment to mimic G29
+#gcode:
+#BED_MESH_CALIBRATE
+##G1 X0 Y0 Z10 F4000
+
+[extruder]
+max_extrude_only_distance: 100.0
+step_pin: PB4
+dir_pin: PB3
+enable_pin: !PC3
+microsteps: 16
+rotation_distance: 31.901           # Calibrate - see https://www.klipper3d.org/Rotation_Distance.html
+nozzle_diameter: 0.400
+filament_diameter: 1.750
+heater_pin: PA1
+sensor_type: EPCOS 100K B57560G104F
+sensor_pin: PC5
+#control: pid
+#pid_Kp: 21.527
+#pid_Ki: 1.063
+#pid_Kd: 108.982
+min_temp: 0
+max_temp: 250
+pressure_advance: 0.0               # Calibrate - see https://www.klipper3d.org/Pressure_Advance.html
+
+
+[heater_bed]
+heater_pin: PA2
+sensor_type: EPCOS 100K B57560G104F
+sensor_pin: PC4
+#control: pid
+#pid_Kp: 54.027
+#pid_Ki: 0.770
+#pid_Kd: 948.182
+min_temp: 0
+max_temp: 130
+
+[fan]
+pin: PA0
+
+[filament_switch_sensor e0_sensor]
+switch_pin: PA4
+
+[mcu]
+serial: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0    # Run ls /dev/serial/by-id/* for micro-controller name
+restart_method: command
+
+[printer]
+kinematics: cartesian
+max_velocity: 300
+max_accel: 3000
+max_z_velocity: 5
+max_z_accel: 100
+
+[display]
+lcd_type: st7920
+cs_pin: PB12
+sclk_pin: PB13
+sid_pin: PB15
+encoder_pins: ^PB14, ^PB10
+click_pin: ^!PB2
+
+[virtual_sdcard]
+path: ~/gcode_files
+
+[pause_resume]
+
+[display_status]
+
+[gcode_macro PAUSE]
+description: Pause the actual running print
+rename_existing: PAUSE_BASE
+gcode:
+    ##### set defaults #####
+    {% set x = params.X|default(230) %}      #edit to your park position
+    {% set y = params.Y|default(230) %}      #edit to your park position
+    {% set z = params.Z|default(10)|float %} #edit to your park position
+    {% set e = params.E|default(1) %}        #edit to your retract length
+    ##### calculate save lift position #####
+    {% set max_z = printer.toolhead.axis_maximum.z|float %}
+    {% set act_z = printer.toolhead.position.z|float %}
+    {% set lift_z = z|abs %}
+    {% if act_z < (max_z - lift_z) %}
+        {% set z_safe = lift_z %}
+    {% else %}
+        {% set z_safe = max_z - act_z %}
+    {% endif %}
+    ##### end of definitions #####
+    PAUSE_BASE
+    G91
+    {% if printer.extruder.can_extrude|lower == 'true' %}
+      G1 E-{e} F2100
+    {% else %}
+      {action_respond_info("Extruder not hot enough")}
+    {% endif %}
+    {% if "xyz" in printer.toolhead.homed_axes %}    
+      G1 Z{z_safe}
+      G90
+      G1 X{x} Y{y} F6000
+    {% else %}
+      {action_respond_info("Printer not homed")}
+    {% endif %}
+
+[gcode_macro RESUME]
+description: Resume the actual running print
+rename_existing: RESUME_BASE
+gcode:
+    ##### set defaults #####
+    {% set e = params.E|default(1) %} #edit to your retract length
+    #### get VELOCITY parameter if specified ####
+    {% if 'VELOCITY' in params|upper %}
+      {% set get_params = ('VELOCITY=' + params.VELOCITY)  %}
+    {%else %}
+      {% set get_params = "" %}
+    {% endif %}
+    ##### end of definitions #####
+    G91
+    {% if printer.extruder.can_extrude|lower == 'true' %}
+      G1 E{e} F2100
+    {% else %}
+      {action_respond_info("Extruder not hot enough")}
+    {% endif %}  
+    RESUME_BASE {get_params}
+
+[gcode_macro CANCEL_PRINT]
+description: Cancel the actual running print
+rename_existing: CANCEL_PRINT_BASE
+gcode:
+    TURN_OFF_HEATERS
+    CANCEL_PRINT_BASE
+
+[gcode_macro BED_MESH_CALIBRATE]
+rename_existing: BASE_BED_MESH_CALIBRATE
+gcode:
+    #before the original gcode
+    BED_MESH_CLEAR
+    QUAD_GANTRY_LEVEL
+    G1 X125 Y125 Z5 F6000
+    #the original gcode
+    BASE_BED_MESH_CALIBRATE
+    #after the original gcode
+
+
+[gcode_macro AUTOLEVEL]
+gcode:
+  {% set t = params.T|default(0)|float %}
+
+  {% if printer.idle_timeout.state == "Printing" %}
+    {action_respond_info("This command cannot be used while printing")}
+  {% elif printer.toolhead.homed_axes != "xyz" %}
+    {action_respond_info("Please home XYZ first")}
+  {% else %}
+    SAVE_GCODE_STATE NAME=G29_state
+    G90
+    G1 Z10 F240
+    {% if t > 30.0 %}
+      M190 S{t}
+    {% endif %}
+    BED_MESH_CALIBRATE
+    {% if 'S' in params %}
+      M140 S{params.S}
+    {% endif %}
+    G90
+    G1 Z10 F240
+    G1 X150 Y155 F6000
+    RESTORE_GCODE_STATE NAME=G29_state MOVE=0
+  {% endif %}
+
+[gcode_macro WIPE_LINE]
+gcode:
+  {% set z = params.Z|default(0.25)|float %}
+  {% set n = params.N|default(0.4)|float %}
+
+  {% if printer.toolhead.homed_axes != "xyz" %}
+    {action_respond_info("Please home XYZ first")}
+  {% elif printer.extruder.temperature < 170 %}
+    {action_respond_info("Extruder temperature too low")}
+  {% else %}
+    SAVE_GCODE_STATE NAME=WIPE_LINE_state
+    M82
+    G90
+    G92 E0
+    G1 X10 Y20 Z5 F3000
+    G1 Z{z} F3000
+    G1 X10 Y150 F1500 E10.83
+    G1 X{ n + 10.0 } F5000
+    G1 Y22 F1500 E21.5
+    G1 Y20 F5000
+    RESTORE_GCODE_STATE NAME=WIPE_LINE_state MOVE=0
+  {% endif %}
+
+
+[gcode_macro POWEROFF]
+gcode:
+  RESPOND TYPE=command MSG=action:poweroff
+
+[gcode_macro LAZY_HOME]
+gcode:
+  {% if printer.toolhead.homed_axes != "xyz" %}
+    G28
+  {% endif %}
+
+[gcode_macro LOAD_FILAMENT]
+gcode:
+  {% set default_u = 100 %}
+
+  {% if 'save_variables' in printer %}
+    {% set svv = printer.save_variables.variables %}
+    {% if 'bowden_len' in svv %}
+      {% set default_u = svv.bowden_len %}
+    {% endif %}
+  {% endif %}
+
+  {% set i = params.I|default(30)|float %}
+  {% set i_f = params.IF|default(180)|float %}
+  {% set u = params.U|default(default_u)|float %}
+  {% set u_f = params.UF|default(360)|float %}
+  {% set p = params.P|default(30)|float %}
+  {% set p_f = params.PF|default(180)|float %}
+
+  {% if printer.idle_timeout.state == "Printing" and not printer.pause_resume.is_paused %}
+    {action_respond_info("This command cannot be used while printing")}
+  {% elif printer.extruder.temperature < 170 %}
+    {action_respond_info("Extruder temperature too low")}
+  {% else %}
+    SAVE_GCODE_STATE NAME=M701_state
+    M83
+    {% if i > 0.0 %}
+      G1 E{i} F{i_f}
+    {% endif %}
+    {% if u > 0.0 %}
+      G1 E{u} F{u_f}
+    {% endif %}
+    {% if p > 0.0 %}
+      G1 E{p} F{p_f}
+    {% endif %}
+    RESTORE_GCODE_STATE NAME=M701_state MOVE=0
+  {% endif %}
+
+[gcode_macro UNLOAD_FILAMENT]
+gcode:
+  {% set default_u = 100 %}
+
+  {% if 'save_variables' in printer %}
+    {% set svv = printer.save_variables.variables %}
+    {% if 'bowden_len' in svv %}
+      {% set default_u = svv.bowden_len %}
+    {% endif %}
+  {% endif %}
+
+  {% set p = params.P|default(8)|float %}
+  {% set p_f = params.PF|default(180)|float %}
+  {% set i = params.I|default(30)|float %}
+  {% set i_f = params.IF|default(180)|float %}
+  {% set u = params.U|default(default_u)|float %}
+  {% set u_f = params.UF|default(360)|float %}
+
+  {% if printer.idle_timeout.state == "Printing" and not printer.pause_resume.is_paused %}
+    {action_respond_info("This command cannot be used while printing")}
+  {% elif printer.extruder.temperature < 170 %}
+    {action_respond_info("Extruder temperature too low")}
+  {% else %}
+    SAVE_GCODE_STATE NAME=M702_state
+    M83
+    {% if p > 0.0 %}
+      G1 E{p} F{p_f}
+    {% endif %}
+    {% if i > 0.0 %}
+      G1 E-{i} F{i_f}
+    {% endif %}
+    {% if u > 0.0 %}
+      G1 E-{u} F{u_f}
+    {% endif %}
+    RESTORE_GCODE_STATE NAME=M702_state MOVE=0
+  {% endif %}
+
+[gcode_macro PRINT_START]
+gcode:
+# Purge line
+    M117 Purge line
+    G1 X2 Y0 F6000
+    G1 Z0.28
+    G92 E0.0
+    G90                             # use absolute coordinates
+    M83                             # extruder relative mode
+    G1 X2 Y190 E15.0 F1500.0        # intro line
+    G1 X2.3 F5000                   # move to 2nd line
+    G1 X2.3 Y10 E15.0 F1200.0       # intro line
+    G1 Z2                           # move up just a bit
+    G21                             # set units to millimeters
+    M82                             # use absolute distances for extrusion
+    G92 E0                          # zero extruder
+
+
+[temperature_sensor raspberry_pi]
+sensor_type: temperature_host
+min_temp: 0
+max_temp: 100
+
+[temperature_sensor mcu_temp]
+sensor_type: temperature_mcu
+min_temp: 0
+max_temp: 100
+
+
+
+#*# <---------------------- SAVE_CONFIG ---------------------->
+#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.
+#*#
+#*# [heater_bed]
+#*# control = pid
+#*# pid_kp = 70.463
+#*# pid_ki = 1.211
+#*# pid_kd = 1025.231
+#*#
+#*# [extruder]
+#*# control = pid
+#*# pid_kp = 30.063
+#*# pid_ki = 2.004
+#*# pid_kd = 112.736
+#*#
+#*# [bltouch]
+#*# z_offset = 2.610
+#*#
+#*# [bed_mesh default]
+#*# version = 1
+#*# points =
+#*# 	  -0.112500, -0.147500, -0.148750, -0.118750, -0.106250, -0.086250, -0.070000
+#*# 	  -0.016250, -0.048750, -0.013750, -0.006250, -0.025000, -0.006250, -0.027500
+#*# 	  0.040000, -0.031250, -0.001250, 0.028750, -0.010000, 0.001250, -0.070000
+#*# 	  0.016250, -0.026250, -0.016250, -0.026250, -0.030000, -0.047500, -0.088750
+#*# 	  -0.041250, -0.052500, -0.058750, -0.061250, -0.071250, -0.071250, -0.090000
+#*# 	  -0.030000, -0.036250, -0.046250, -0.042500, -0.056250, -0.033750, -0.030000
+#*# 	  -0.063750, -0.120000, -0.123750, -0.105000, -0.097500, -0.052500, -0.025000
+#*# tension = 0.2
+#*# min_x = 60.0
+#*# algo = bicubic
+#*# y_count = 7
+#*# mesh_y_pps = 2
+#*# min_y = 40.0
+#*# x_count = 7
+#*# max_y = 289.96
+#*# mesh_x_pps = 2
+#*# max_x = 289.97
+#*#
+#*# [bed_mesh ENDER]
+#*# version = 1
+#*# points =
+#*# 	  -0.112500, -0.147500, -0.148750, -0.118750, -0.106250, -0.086250, -0.070000
+#*# 	  -0.016250, -0.048750, -0.013750, -0.006250, -0.025000, -0.006250, -0.027500
+#*# 	  0.040000, -0.031250, -0.001250, 0.028750, -0.010000, 0.001250, -0.070000
+#*# 	  0.016250, -0.026250, -0.016250, -0.026250, -0.030000, -0.047500, -0.088750
+#*# 	  -0.041250, -0.052500, -0.058750, -0.061250, -0.071250, -0.071250, -0.090000
+#*# 	  -0.030000, -0.036250, -0.046250, -0.042500, -0.056250, -0.033750, -0.030000
+#*# 	  -0.063750, -0.120000, -0.123750, -0.105000, -0.097500, -0.052500, -0.025000
+#*# tension = 0.2
+#*# min_x = 60.0
+#*# algo = bicubic
+#*# y_count = 7
+#*# mesh_y_pps = 2
+#*# min_y = 40.0
+#*# x_count = 7
+#*# max_y = 289.96
+#*# mesh_x_pps = 2
+#*# max_x = 289.97
